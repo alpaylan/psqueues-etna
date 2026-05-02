@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: etna-ify <etna-ify@local>
+Date: Thu, 1 May 2026 00:00:00 +0000
+Subject: [PATCH] Fix OrdPSQ tree balancing logic (issue #60)
+
+Synthetic restatement of upstream commit 6a4a2b735be37099738ace78c28a252dd5391a39
+("Fix OrdPSQ tree balancing logic. fixes #60 (#61)") narrowed to the
+`lbalance`/`rbalance` rewrite. The pre-fix version short-circuited
+unconditionally whenever either child was `Start`, even when the other
+child was deeply nested -- so the omega-rebalancing trigger never fired
+on those nodes, producing trees that satisfy the BST and heap
+invariants but violate the omega-balance invariant.
+
+`hasBalancedTreeProperty` (already in `valid` on modern HEAD) is left
+untouched here, so reverse-applying this patch produces a tree that
+fails `valid` after a long ascending insert sequence.
+---
+ src/Data/OrdPSQ/Internal.hs | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Data/OrdPSQ/Internal.hs b/src/Data/OrdPSQ/Internal.hs
+index 3aefa18..5472e4c 100644
+--- a/src/Data/OrdPSQ/Internal.hs
++++ b/src/Data/OrdPSQ/Internal.hs
+@@ -519,16 +519,14 @@ rloser k p v tl m tr = RLoser (1 + size' tl + size' tr) (E k p v) tl m tr
+ lbalance, rbalance
+     :: (Ord k, Ord p)
+     => k -> p -> v -> LTree k p v -> k -> LTree k p v -> LTree k p v
+-lbalance k p v Start m r        = lloser        k p v Start m r
+-lbalance k p v l m Start        = lloser        k p v l m Start
+ lbalance k p v l m r
++    | size' r + size' l < 2     = lloser        k p v l m r
+     | size' r > omega * size' l = lbalanceLeft  k p v l m r
+     | size' l > omega * size' r = lbalanceRight k p v l m r
+     | otherwise                 = lloser        k p v l m r
+ 
+-rbalance k p v Start m r        = rloser        k p v Start m r
+-rbalance k p v l m Start        = rloser        k p v l m Start
+ rbalance k p v l m r
++    | size' r + size' l < 2     = rloser        k p v l m r
+     | size' r > omega * size' l = rbalanceLeft  k p v l m r
+     | size' l > omega * size' r = rbalanceRight k p v l m r
+     | otherwise                 = rloser        k p v l m r
+
+--
+2.39.5

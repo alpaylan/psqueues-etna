@@ -16,3 +16,6 @@ cabal.sandbox.config
 dist-newstyle
 cabal.project.local
 dist-mcabal
+.hegel/
+progress.jsonl
+etna.log

@@ -1,0 +1,100 @@
+name = "psqueues"
+description = "Jasper Van der Jeugt's `psqueues` package (jaspervdj/psqueues): pure priority search queues in three flavours (OrdPSQ, IntPSQ, HashPSQ). Bug fixes mined from upstream history; modern HEAD is the base, each patch reverse-applies a fix to install the original bug."
+language = "haskell"
+strategies = ["quickcheck", "hedgehog", "falsify", "smallcheck"]
+crate = "psqueues"
+base_commit = "e65ee4793b3ab3287397703d9c82a6168b74f875"
+
+# ---------------------------------------------------------------------------
+# Variant: ord_psq_from_list_37c12f5_1
+# ---------------------------------------------------------------------------
+[[tasks]]
+mutations = ["ord_psq_from_list_37c12f5_1"]
+
+[tasks.source]
+repo = "https://github.com/jaspervdj/psqueues"
+commits = ["37c12f5cef9962ca92d4198a5a3ed400e8c64e73"]
+commit_subjects = ["Fix the fromList implementation (#50)"]
+origin = "internal"
+summary = "Pre-fix `OrdPSQ.fromList` was `foldr (\\(k,p,v) q -> insert k p v q) empty`. `foldr` processes the input list right-to-left, so when an item with key `k` is followed by another item with the same key, the *first* occurrence is the one that ends up in the queue -- the opposite of the function's documented contract (\"the last priority and value for the key is retained\"). The fix swapped to `foldl'`. The patch reverts to the historical `foldr` formulation."
+
+[tasks.injection]
+kind = "patch"
+files = ["src/Data/OrdPSQ/Internal.hs"]
+locations = [{ file = "src/Data/OrdPSQ/Internal.hs", line = 292, symbol = "fromList" }]
+patch = "patches/ord_psq_from_list_37c12f5_1.patch"
+
+[tasks.bug]
+short_name = "from_list_first_occurrence_wins"
+invariant = "For every list `xs :: [(k, p, v)]` and every key `k` that appears in `xs`, `lookup k (fromList xs)` equals `(p, v)` for the *last* (k, p, v) triple in `xs` whose key matches."
+how_triggered = "Reverse-applying the patch swaps `foldl'` for `foldr`. For any list with at least two entries sharing a key, the buggy `fromList` retains the first-encountered (k, p, v) and discards subsequent ones, so `lookup` returns the wrong (p, v) pair."
+
+[[tasks.tasks]]
+property = "OrdPsqFromListLastOccurrenceWins"
+witnesses = [
+  { test_fn = "witness_ord_psq_from_list_last_occurrence_wins_case_two_dup",   note = "fromList [(1,0,100),(1,0,200)] must give lookup 1 == Just (0,200)" },
+  { test_fn = "witness_ord_psq_from_list_last_occurrence_wins_case_three_dup", note = "Mixed-key list with overrides at keys 1 and 2 must keep the last value/priority" },
+]
+
+# ---------------------------------------------------------------------------
+# Variant: hash_psq_insert_equal_priority_c107f38_1
+# ---------------------------------------------------------------------------
+[[tasks]]
+mutations = ["hash_psq_insert_equal_priority_c107f38_1"]
+
+[tasks.source]
+repo = "https://github.com/jaspervdj/psqueues"
+commits = ["c107f382d7c93692e0bb64140c4f6823f25d76e1"]
+commit_subjects = ["HashPSQ.valid (and fix bug found using valid...)"]
+origin = "internal"
+summary = "Pre-fix `HashPSQ.insert` used a non-strict priority comparison `p' <= p` to decide whether the existing bucket head should stay or whether the incoming item should take its place. When two distinct keys hash to the same `IntPSQ` slot and are inserted with *equal* priority, `<=` keeps whichever item was inserted first as the bucket head -- regardless of which key is smaller. The fix introduced a strict `p' < p || (p == p' && k' < k)` form that breaks ties by key. The patch reverts the priority guard to `p' <= p`."
+
+[tasks.injection]
+kind = "patch"
+files = ["src/Data/HashPSQ/Internal.hs"]
+locations = [{ file = "src/Data/HashPSQ/Internal.hs", line = 184, symbol = "insert" }]
+patch = "patches/hash_psq_insert_equal_priority_c107f38_1.patch"
+
+[tasks.bug]
+short_name = "hash_psq_insert_drops_smaller_key_at_equal_priority"
+invariant = "For any two distinct keys `k1`, `k2` that share a hash slot and any priority `p`, `findMin (insert k2 p v2 (insert k1 p v1 empty))` equals `Just (min k1 k2, p, v_min)` where `v_min` is the value associated with the smaller key."
+how_triggered = "Reverse-applying the patch turns the strict priority+key comparison back into `p' <= p`. When the second insert has the same priority but a smaller key, the buggy version drops it into the OrdPSQ tail instead of promoting it to the bucket head, so `findMin` returns the larger key."
+
+[[tasks.tasks]]
+property = "HashPsqInsertEqualPriorityKeyTieBreak"
+witnesses = [
+  { test_fn = "witness_hash_psq_insert_equal_priority_key_tie_break_case_descending",  note = "Inserting (k=2,p=0) then (k=1,p=0) must leave findMin == Just (CK 1, 0, ...)" },
+  { test_fn = "witness_hash_psq_insert_equal_priority_key_tie_break_case_three_apart", note = "Inserting (k=5,p=7) then (k=1,p=7) must leave findMin == Just (CK 1, 7, ...)" },
+]
+
+# ---------------------------------------------------------------------------
+# Variant: ord_psq_balance_6a4a2b7_1
+# ---------------------------------------------------------------------------
+[[tasks]]
+mutations = ["ord_psq_balance_6a4a2b7_1"]
+
+[tasks.source]
+repo = "https://github.com/jaspervdj/psqueues"
+commits = ["6a4a2b735be37099738ace78c28a252dd5391a39"]
+commit_subjects = ["Fix OrdPSQ tree balancing logic. fixes #60 (#61)"]
+origin = "internal"
+summary = "Pre-fix `lbalance`/`rbalance` short-circuited unconditionally whenever either child was `Start` (a leaf), regardless of how deeply nested the opposite child was. This was an attempted optimisation of Hinze's original paper, but it skipped the omega-rebalancing trigger on inserts at the boundary -- so a long ascending insert sequence produces a tree that satisfies the BST and heap invariants but violates the omega-balance invariant. The fix reverted to the paper's formulation (with a `size' r + size' l < 2` guard for the trivial cases). The patch reverts to the historical short-circuit form."
+
+[tasks.injection]
+kind = "patch"
+files = ["src/Data/OrdPSQ/Internal.hs"]
+locations = [{ file = "src/Data/OrdPSQ/Internal.hs", line = 522, symbol = "lbalance" }]
+patch = "patches/ord_psq_balance_6a4a2b7_1.patch"
+
+[tasks.bug]
+short_name = "lbalance_skips_rebalance_on_start_child"
+invariant = "After an arbitrary sequence of `insert` and `delete` operations, `OrdPSQ.valid q` must return `True` (which on modern HEAD includes the omega-balance check `hasBalancedTreeProperty`)."
+how_triggered = "Reverse-applying the patch puts back the `Start`-child short-circuits in `lbalance`/`rbalance`. A monotonically-ascending insert sequence repeatedly hits the short-circuit (the left child stays `Start`, the right grows unbounded), so the resulting tree fails `hasBalancedTreeProperty` and `valid` returns `False`."
+
+[[tasks.tasks]]
+property = "OrdPsqBalanceAfterOperations"
+smallcheck_timeout = true
+witnesses = [
+  { test_fn = "witness_ord_psq_balance_after_operations_case_ascending_64",  note = "64 ascending inserts must produce a tree that passes OrdPSQ.valid" },
+  { test_fn = "witness_ord_psq_balance_after_operations_case_ascending_128", note = "128 ascending inserts must produce a tree that passes OrdPSQ.valid" },
+]

@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: etna-ify <etna-ify@local>
+Date: Thu, 1 May 2026 00:00:00 +0000
+Subject: [PATCH] Fix HashPSQ.insert tie-break for equal priorities
+
+Synthetic restatement of upstream commit c107f382d7c93692e0bb64140c4f6823f25d76e1
+("HashPSQ.valid (and fix bug found using valid...)") narrowed to the
+insert priority-comparison guard. Reverse-applying this patch installs
+the bug: when two keys hash to the same bucket and are inserted with
+equal priority, the buggy `p' <= p` guard keeps the first-inserted item
+as the bucket head, so `findMin` reports the wrong key/value (the
+modern fix uses a strict `<` plus a key tie-breaker).
+---
+ src/Data/HashPSQ/Internal.hs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Data/HashPSQ/Internal.hs b/src/Data/HashPSQ/Internal.hs
+--- a/src/Data/HashPSQ/Internal.hs
++++ b/src/Data/HashPSQ/Internal.hs
+@@ -181,7 +181,7 @@ insert k p v (HashPSQ ipsq) =
+         | k' == k                       =
+             -- Tricky: p might have less priority than an item in 'os'.
+             Just (mkBucket k p v os)
+-        | p' <= p                       =
++        | p' < p || (p == p' && k' < k) =
+             Just (p', B k' v' (OrdPSQ.insert k  p  v  os))
+         | OrdPSQ.member k os            =
+             -- This is a bit tricky: k might already be present in 'os' and we
+--
+2.39.5
