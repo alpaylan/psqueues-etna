@@ -19,3 +19,9 @@ dist-mcabal
 .hegel/
 progress.jsonl
 etna.log
+/.hegel/
+/.marauders/
+/etna.log
+/progress.jsonl
+/dist-newstyle/
+/etna/dist-newstyle/

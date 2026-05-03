@@ -1,27 +1,13 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: etna-ify <etna-ify@local>
-Date: Thu, 1 May 2026 00:00:00 +0000
-Subject: [PATCH] Fix OrdPSQ.fromList: foldr -> foldl'
-
-Synthetic restatement of upstream commit 37c12f5cef9962ca92d4198a5a3ed400e8c64e73
-("Fix the fromList implementation (#50)") against modern HEAD. Reverse-
-applying this patch (`git apply -R`) installs the bug: `fromList` uses
-`foldr` and the *first* occurrence of a duplicate key wins, which is the
-opposite of the documented contract ("the last priority and value for
-the key is retained").
----
- src/Data/OrdPSQ/Internal.hs | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
-
 diff --git a/src/Data/OrdPSQ/Internal.hs b/src/Data/OrdPSQ/Internal.hs
+index 5472e4c..3b93091 100644
 --- a/src/Data/OrdPSQ/Internal.hs
 +++ b/src/Data/OrdPSQ/Internal.hs
 @@ -71,7 +71,7 @@ module Data.OrdPSQ.Internal
      ) where
-
+ 
  import           Control.DeepSeq  (NFData (rnf))
--import           Data.Foldable    (Foldable (foldr))
-+import           Data.Foldable    (Foldable (foldl'))
+-import           Data.Foldable    (Foldable (foldl'))
++import           Data.Foldable    (Foldable (foldr))
  import qualified Data.List        as List
  import           Data.Maybe       (isJust, fromMaybe)
  import           Data.Traversable
@@ -29,10 +15,8 @@ diff --git a/src/Data/OrdPSQ/Internal.hs b/src/Data/OrdPSQ/Internal.hs
  -- last priority and value for the key is retained.
  {-# INLINABLE fromList #-}
  fromList :: (Ord k, Ord p) => [(k, p, v)] -> OrdPSQ k p v
--fromList = foldr (\(k, p, v) q -> insert k p v q) empty
-+fromList = foldl' (\q (k, p, v) -> insert k p v q) empty
-
+-fromList = foldl' (\q (k, p, v) -> insert k p v q) empty
++fromList = foldr (\(k, p, v) q -> insert k p v q) empty
+ 
  -- | /O(n)/ Convert a queue to a list of (key, priority, value) tuples. The
  -- order of the list is not specified.
---
-2.39.5

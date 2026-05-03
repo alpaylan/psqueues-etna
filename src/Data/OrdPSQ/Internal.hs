@@ -519,14 +519,16 @@ rloser k p v tl m tr = RLoser (1 + size' tl + size' tr) (E k p v) tl m tr
 lbalance, rbalance
     :: (Ord k, Ord p)
     => k -> p -> v -> LTree k p v -> k -> LTree k p v -> LTree k p v
+lbalance k p v Start m r        = lloser        k p v Start m r
+lbalance k p v l m Start        = lloser        k p v l m Start
 lbalance k p v l m r
-    | size' r + size' l < 2     = lloser        k p v l m r
     | size' r > omega * size' l = lbalanceLeft  k p v l m r
     | size' l > omega * size' r = lbalanceRight k p v l m r
     | otherwise                 = lloser        k p v l m r
 
+rbalance k p v Start m r        = rloser        k p v Start m r
+rbalance k p v l m Start        = rloser        k p v l m Start
 rbalance k p v l m r
-    | size' r + size' l < 2     = rloser        k p v l m r
     | size' r > omega * size' l = rbalanceLeft  k p v l m r
     | size' l > omega * size' r = rbalanceRight k p v l m r
     | otherwise                 = rloser        k p v l m r
